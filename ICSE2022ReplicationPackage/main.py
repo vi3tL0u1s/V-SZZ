@@ -24,7 +24,7 @@ def run_szz(project, commits, method, repo_url=None, max_change_size=DEFAULT_MAX
     if os.path.exists(output_file):
         return
     use_temp_dir = False
-
+    print("Running SZZ for project:", project)
     output = {}
     if method == "b":
         b_szz = BaseSZZ(repo_full_name=project, repo_url=repo_url, repos_dir=REPOS_DIR, use_temp_dir=use_temp_dir)
@@ -58,6 +58,8 @@ def run_szz(project, commits, method, repo_url=None, max_change_size=DEFAULT_MAX
             output[commit] = [commit.hexsha for commit in bug_introducing_commits]
     elif method == "my":
         my_szz = MySZZ(repo_full_name=project, repo_url=repo_url, repos_dir=REPOS_DIR, use_temp_dir=use_temp_dir, ast_map_path=AST_MAP_PATH)
+        print(commits[0])
+        print(my_szz)
         for commit in commits:
             print('Fixing Commit:', commit)
             imp_files = my_szz.get_impacted_files(fix_commit_hash=commit, file_ext_to_parse=['c', 'java', 'cpp', 'h', 'hpp'], only_deleted_lines=True)
@@ -83,12 +85,16 @@ if __name__ == "__main__":
     use_temp_dir = False
 
     # fixing_commits = JAVA_CVE_FIX_COMMITS
-    # fixing_commits = C_CVE_FIX_COMMITS
+    fixing_commits = C_CVE_FIX_COMMITS
 
-    project_commits = load_annotated_commits()
+    # project_commits1 = load_annotated_commits()
+    project_commits = C_PROJECTS
+    
     for project in project_commits:
         print("Project:", project)
-        run_szz(project, project_commits[project], 'ma')
+        repo_url = 'https://github.com/FFmpeg/FFmpeg.git'
+        fixing_cve_commits = read_cve_commits(project, fixing_commits)
+        run_szz(project, fixing_cve_commits, 'my', repo_url = repo_url)
 
         break
 

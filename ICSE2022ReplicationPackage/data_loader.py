@@ -46,7 +46,7 @@ ANNOTATED_CVES = load_annotated_cves()
 
 def read_cve_commits(project, cve_fix_commits):
     cve_commits = cve_fix_commits[project]['cves']
-    
+    # print(cve_commits["CVE-2018-7557"])
     all_valid_commits = []
     for cve_id in cve_commits:
         if 'fix_details' not in cve_commits[cve_id]:
@@ -59,5 +59,5 @@ def read_cve_commits(project, cve_fix_commits):
         valid_fixes = [fix['commit_id'] for fix in fixes_detail]
 
         all_valid_commits.extend(valid_fixes)
-    
+    # print(len(list(set(all_valid_commits))))
     return list(set(all_valid_commits))

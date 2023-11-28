@@ -53,7 +53,8 @@ class AbstractSZZ(ABC):
 
         if not use_temp_dir:
             # TODO: update the temp directory
-            self.__temp_dir = '/data1/baolingfeng/ICSE2022ReplicationPackage/temp'
+            # self.__temp_dir = '/data1/baolingfeng/ICSE2022ReplicationPackage/temp'
+            self.__temp_dir ='/home/vietl/do28_scratch/vietl/V-SZZ/ICSE2022ReplicationPackage/temp'
 
             repo_dir = os.path.join(repos_dir, repo_full_name)
             self._repository_path = repo_dir
@@ -219,21 +220,23 @@ class AbstractSZZ(ABC):
 
         bug_introd_commits = set()
         mod_line_ranges = self._parse_line_ranges(modified_lines)
+        print(mod_line_ranges)
         log.info(f"processing file: {file_path}")
-        for entry in self.repository.blame_incremental(**kwargs, rev=rev, L=mod_line_ranges, file=file_path):
-            # entry.linenos = input lines to blame (current lines)
-            # entry.orig_lineno = output line numbers from blame (previous commit lines from blame)
-            for line_num in entry.orig_linenos:
-                source_file_content = self.repository.git.show(f"{entry.commit.hexsha}:{entry.orig_path}")
-                line_str = source_file_content.split('\n')[line_num - 1].strip()
-                b_data = BlameData(entry.commit, line_num, line_str, entry.orig_path)
+        for mod_line_ranges in mod_line_ranges:
+            for entry in self.repository.blame_incremental(**kwargs, rev=rev, L=mod_line_ranges, file=file_path):
+                # entry.linenos = input lines to blame (current lines)
+                # entry.orig_lineno = output line numbers from blame (previous commit lines from blame)
+                for line_num in entry.orig_linenos:
+                    source_file_content = self.repository.git.show(f"{entry.commit.hexsha}:{entry.orig_path}")
+                    line_str = source_file_content.split('\n')[line_num - 1].strip()
+                    b_data = BlameData(entry.commit, line_num, line_str, entry.orig_path)
 
-                if skip_comments and self._is_comment(line_num, source_file_content, ntpath.basename(b_data.file_path)):
-                    log.info(f"skip comment line ({line_num}): {line_str}")
-                    continue
+                    if skip_comments and self._is_comment(line_num, source_file_content, ntpath.basename(b_data.file_path)):
+                        log.info(f"skip comment line ({line_num}): {line_str}")
+                        continue
 
-                log.info(b_data)
-                bug_introd_commits.add(b_data)
+                    log.info(b_data)
+                    bug_introd_commits.add(b_data)
 
         return bug_introd_commits
 
