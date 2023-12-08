@@ -1,0 +1,16 @@
+{
+    "dfd30e220dbff8baf85e3b6463b4be32e2b1b3d0": [
+        {
+            "line_num": 3146,
+            "line_str": "pnodeParent->sxFnc.funcInfo->OnEndVisitScope(pnodeScope->sxWith.scope);",
+            "file_path": "lib/Runtime/ByteCode/ByteCodeGenerator.cpp",
+            "previous_commits": [
+                [
+                    "5d8406741f8c60e7bf0a06e4fb71a5cf7a6458dc",
+                    3146,
+                    "pnodeParent->sxFnc.funcInfo->OnEndVisitScope(pnodeScope->sxWith.scope);"
+                ]
+            ]
+        }
+    ]
+}
