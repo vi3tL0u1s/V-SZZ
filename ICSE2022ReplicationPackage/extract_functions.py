@@ -4,6 +4,10 @@ import os
 import re
 from setting import *
 import tempfile
+import json
+import hashlib
+import pandas as pd
+import re
 
 def checkout_file_at_commit(repo_path, relative_file_path, commit_hash):
     """
@@ -72,7 +76,7 @@ def convert_to_srcml(src_file_path):
     Convert a C++ source file to srcML format and return as a string.
     """
     try:
-        print('Converting to srcML...')
+        # print('Converting to srcML...')
         command = ['srcml', src_file_path, '--position']
 
         # Run the command
@@ -97,7 +101,10 @@ def extract_function_containing_line(src_file_path, line_number, line_str):
         root = ET.fromstring(srcml_content)
 
         # Define the namespace
-        ns = {'src': 'http://www.srcML.org/srcML/src'}
+        ns = {
+            'src': 'http://www.srcML.org/srcML/src',
+            'pos': 'http://www.srcML.org/srcML/position',    
+        }
         # Search for the function containing the specified line
         for function in root.findall(".//src:function", ns):
             # if line_str in ET.tostring(function, encoding='unicode'):
@@ -109,17 +116,52 @@ def extract_function_containing_line(src_file_path, line_number, line_str):
             # Extract the starting and ending line numbers
             start_line = int(pos_start.split(':')[0]) if pos_start else None
             end_line = int(pos_end.split(':')[0]) if pos_end else None
-            if start_line and end_line and start_line <= line_number <= end_line:
+
+            # print((start_line <= line_number <= end_line))
+
+            if start_line and end_line and (start_line <= line_number <= end_line):
                 function_src = convert_xml_string_to_source(ET.tostring(function, encoding='unicode'))
                 if line_str in function_src:
                     function_name = function.find('./src:name', ns)
-                    print(f'Found {line_str} in the function {function_name.text}.')
-                    return function_src, function_name.text
+                    # function_name_parts = function.findall('.//src:name', ns)
+                    function_name = ''.join([part.text for part in function_name if part.text])
+                    print(f'Found {line_str} in the function {function_name}.')
+                    return function_src, function_name
 
     except Exception as e:
         print(f"Error While Finding The Function: {e}")
 
     return None, None
+
+def extract_function_from_name(src_file_path, function_name):
+    """
+    Extract latent functions between the BFC and BIC based on file name and function name.
+    """
+    try:
+        srcml_content = convert_to_srcml(src_file_path)
+        # print(srcml_content)
+        if not srcml_content:
+            return None, None
+        root = ET.fromstring(srcml_content)
+
+        # Define the namespace
+        ns = {
+            'src': 'http://www.srcML.org/srcML/src',  # Adjust if needed
+            'pos': 'http://www.srcML.org/srcML/position',
+              # Adjust if needed
+        }
+        # Search for the function containing the specified line
+        for function in root.findall(".//src:function", ns):
+            extract_name = function.find('./src:name', ns)
+            extract_name = ''.join([part.text for part in extract_name if part.text])
+            if extract_name == function_name:
+                function_src = convert_xml_string_to_source(ET.tostring(function, encoding='unicode'))
+                if function_src:
+                    return function_src
+    except Exception as e:
+        print(f"An error occurred while extracting the latent functions: {e}")
+
+    return None
 
 def convert_line_to_srcml(line_str, language, line_number):
     """
@@ -192,7 +234,8 @@ def convert_xml_string_to_source(xml_content):
         # Execute the command and capture the output
         result = subprocess.run(command, check=True, capture_output=True, text=True)
         lines = result.stdout.splitlines()
-        return '\n'.join(lines[1:])
+        # return '\n'.join(lines[1:])
+        return '\n'.join(lines)
     except subprocess.CalledProcessError as e:
         print(f"An error occurred while converting XML to source code: {e}")
         return None
@@ -205,41 +248,102 @@ def convert_xml_string_to_source(xml_content):
             temp_xml_file.close()
             os.remove(temp_xml_file_path)
 
+def replace_newlines_before_first_brace_with_space(text):
+    # Find the first brace
+    first_brace_index = text.find('{')
+    if first_brace_index == -1:
+        return text  # No brace found; return original text
+
+    # Replace all newline characters before the first brace with a space
+    before_brace = text[:first_brace_index]
+    after_brace = text[first_brace_index:]
+    before_brace = re.sub(r'\s+', ' ', before_brace)
+
+    return before_brace + after_brace
 
 def main():
-    # Change with your working directory in setting.py
     project = 'ChakraCore'
     repo_path = os.path.join(REPOS_DIR, project)
-    relative_file_path = 'lib/Runtime/ByteCode/ByteCodeGenerator.cpp'
-    if check_file_extension(relative_file_path, 'cpp'):
-        language = 'cpp'
-    elif check_file_extension(relative_file_path, 'c'):
-        language = 'c'
-    commit_hash = '5d8406741f8c60e7bf0a06e4fb71a5cf7a6458dc'  
-    line_str = 'pnodeParent->sxFnc.funcInfo->OnEndVisitScope(pnodeScope->sxWith.scope);'  
-    line_number = 3146
-    bic = '5d8406741f8c60e7bf0a06e4fb71a5cf7a6458dc'
-    bfc = 'dfd30e220dbff8baf85e3b6463b4be32e2b1b3d0'
-    commits = get_commit_hashes_between(repo_path, bic, bfc)
-    print(len(commits))
-    # print(commits[0])
-    # print(commits[-1])
+    # relative_file_path = 'lib/Runtime/ByteCode/ByteCodeGenerator.cpp'
+    # if check_file_extension(relative_file_path, 'cpp'):
+    #     language = 'cpp'
+    # elif check_file_extension(relative_file_path, 'c'):
+    #     language = 'c'
     
-    # exit()
 
-    # adapted_line_str = convert_line_to_srcml(line_str, language, line_number)
+    # start with open json files
+    file_name = f'results/my-{project}.json'
+    # file_name = 'ICSE2022ReplicationPackage/results/my-ChakraCore.json'
+    # file_name = os.path.join(os.getcwd(), file_name)
+    with open(file_name, 'r') as file:
+        vszz_out = json.load(file)
+    out_data_list = []
+    
+    for bfc in vszz_out.keys():    
+        if len(vszz_out[bfc]):  
+            for deleted_line in vszz_out[bfc]:
+                line_number = deleted_line['line_num']
+                line_str = deleted_line['line_str']
+                relative_file_path = deleted_line['file_path']
+                previous_commits = deleted_line['previous_commits']
+                for bic in previous_commits:
+                    bic_commit_hash = bic[0]
+                    bic_line_number = bic[1]
+                    bic_line_str = bic[2]
+                    # print(bic_commit_hash)
+                    bic_file = checkout_file_at_commit(repo_path, relative_file_path, bic_commit_hash)
+                    if bic_file:
+                        bic_function_code, bic_function_name = extract_function_containing_line(bic_file, bic_line_number, bic_line_str)
+                        if bic_function_code and bic_function_name:
+                            bic_function_code = replace_newlines_before_first_brace_with_space(bic_function_code)
+                            md5_function = hashlib.md5(bic_function_code.encode('utf-8')).hexdigest()
+                            print("MD5")
+                            print(md5_function)
+                            print("FUNCTION NAME: ", bic_function_name)
+                            out_data = {
+                                'commit_hash': bic_commit_hash,
+                                'type': 'bic',
+                                'f_name': bic_function_name,
+                                'md5': md5_function,
+                                'src': bic_function_code,
+                                'target' : 1
+                            }
+                            out_data_list.append(out_data)
+                        elif bic_function_code is None or bic_function_name is None:
+                            print(f"Function not found at commit {bic_commit_hash}, line {bic_line_number}, {bic_line_str}.")
+                        
+                        # getting latent
+                        latents = get_commit_hashes_between(repo_path, bic_commit_hash, bfc)
+                        if len(latents) > 0:
+                            for lantent in latents:
+                                latent_file = checkout_file_at_commit(repo_path, relative_file_path, lantent)
+                                latent_function_code, latent_function_name = extract_function_containing_line(latent_file, bic_line_number, bic_line_str)
+                                if latent_function_code and latent_function_name:
+                                    latent_function_code = replace_newlines_before_first_brace_with_space(latent_function_code)
+                                    md5_function = hashlib.md5(latent_function_code.encode('utf-8')).hexdigest()
+                                    print("MD5")
+                                    print(md5_function)
+                                    print("FUNCTION NAME: ", latent_function_name)
+                                    out_data = {
+                                        'commit_hash': lantent,
+                                        'type': 'latent',
+                                        'f_name': latent_function_name,
+                                        'md5': md5_function,
+                                        'src': latent_function_code,
+                                        'target' : 1
+                                    }
+                                    out_data_list.append(out_data)
+                                elif latent_function_code is None or latent_function_name is None:
+                                    print(f"Function not found at commit {lantent}, line {bic_line_number}, {bic_line_str}.")
 
-    # print(adapted_line_str)
-    # Checkout the file at the specific commit
-    checked_out_file = checkout_file_at_commit(repo_path, relative_file_path, commit_hash)
-    if checked_out_file:
-        # Extract the function
-        function_code, function_name = extract_function_containing_line(checked_out_file, line_number, line_str)
-        if function_code:
-            with open('test.cpp', 'w') as file:
-                file.write(function_code)
-        else:
-            print("Function not found.")
+    df = pd.DataFrame(out_data_list)
+    df = df.drop_duplicates(subset='md5')
+    column_order = ['commit_hash','type', 'f_name', 'md5', 'src', 'target']
+    df = df[column_order]
+
+    out_file= f"results/bic-{project}.csv"
+    df.to_csv(out_file, index=False)
+
 
 if __name__ == "__main__":
     main()
